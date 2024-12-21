@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app_network
+
+  mysql:
+    image: mysql:latest
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: YAzoMwhlBgFDyrDcVzYogHPzeTCPPtXJ
+      MYSQL_DATABASE: railway
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  app:
+    build:
+      context: .
+    container_name: nestjs-app
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=docker
+      - MONGODB_URI=mongodb://mongo:27017/si_lab4
+      - MONGODB_DB_NAME=si_lab4
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=YAzoMwhlBgFDyrDcVzYogHPzeTCPPtXJ
+      - MYSQL_DATABASE=railway
+      - RABBITMQ_URI=amqp://user:password@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      mysql:
+        condition: service_started
+    networks:
+      - app_network
+
+  microservice:
+    build:
+      context: ../microservice
+    container_name: nestjs-microservice
+    environment:
+      - NODE_ENV=docker
+      - RABBITMQ_URI=amqp://user:password@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app_network
+
+volumes:
+  mongo_data:
+  mysql_data:
+
+networks:
+  app_network:
+    driver: bridge
